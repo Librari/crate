@@ -114,7 +114,7 @@ public class NodeFetchOperationTest extends CrateUnitTest {
                 mock(RamAccountingContext.class));
 
         expectedException.expect(IllegalArgumentException.class);
-        expectedException.expectMessage(String.format(Locale.ENGLISH, "No shard collect context found for job search context id '%s'", 0));
+        expectedException.expectMessage(String.format(Locale.ENGLISH, "No SearchContext found for job search context id '%s'", 0));
         nodeFetchOperation.fetch(mock(SingleBucketBuilder.class));
     }
 }

@@ -28,6 +28,7 @@ import com.carrotsearch.hppc.cursors.IntObjectCursor;
 import com.carrotsearch.hppc.cursors.LongCursor;
 import com.google.common.base.Function;
 import com.google.common.collect.Lists;
+import io.crate.action.sql.query.CrateSearchContext;
 import io.crate.breaker.RamAccountingContext;
 import io.crate.jobs.JobContextService;
 import io.crate.jobs.JobExecutionContext;
@@ -38,7 +39,6 @@ import io.crate.operation.RowUpstream;
 import io.crate.operation.ThreadPools;
 import io.crate.operation.collect.CollectInputSymbolVisitor;
 import io.crate.operation.collect.JobCollectContext;
-import io.crate.operation.collect.JobFetchShardContext;
 import io.crate.operation.reference.DocLevelReferenceResolver;
 import io.crate.operation.reference.doc.lucene.LuceneDocLevelReferenceResolver;
 import io.crate.planner.symbol.Reference;
@@ -125,10 +125,9 @@ public class NodeFetchOperation implements RowUpstream {
 
         List<LuceneDocFetcher> shardFetchers = new ArrayList<>(numShards);
         for (IntObjectCursor<ShardDocIdsBucket> entry : shardBuckets) {
-            JobFetchShardContext shardContext = jobCollectContext.getFetchContext(entry.key);
-            if (shardContext == null) {
-                String errorMsg = String.format(Locale.ENGLISH, "No shard collect context found for job search context id '%s'", entry.key);
-                LOGGER.error(errorMsg);
+            CrateSearchContext searchContext = jobCollectContext.getContext(entry.key);
+            if (searchContext == null) {
+                String errorMsg = String.format(Locale.ENGLISH, "No SearchContext found for job search context id '%s'", entry.key);
                 throw new IllegalArgumentException(errorMsg);
             }
             // create new collect expression for every shard (collect expressions are not thread-safe)
@@ -139,10 +138,10 @@ public class NodeFetchOperation implements RowUpstream {
                             docCtx.docLevelExpressions(),
                             upstreamsRowMerger,
                             entry.value,
-                            shardContext,
-                            closeContext));
+                            closeContext,
+                            searchContext,
+                            jobCollectContext));
         }
-
         try {
             runFetchThreaded(shardFetchers, ramAccountingContext);
         } catch (RejectedExecutionException e) {

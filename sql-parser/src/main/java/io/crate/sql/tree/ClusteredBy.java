@@ -57,8 +57,11 @@ public class ClusteredBy extends CrateTableOption {
 
         ClusteredBy that = (ClusteredBy) o;
 
-        if (numberOfShards != that.numberOfShards) return false;
-        if (!column.equals(that.column)) return false;
+        if (numberOfShards.isPresent() != that.numberOfShards.isPresent()) return false;
+        if (numberOfShards.isPresent() && !numberOfShards.get().equals(that.numberOfShards.get())) return false;
+
+        if (column.isPresent() != that.column.isPresent()) return false;
+        if (column.isPresent() && !column.get().equals(that.column.get())) return false;
 
         return true;
     }

@@ -240,6 +240,7 @@ public class TestStatementBuilder
         printStatement("insert into t (a, b) values (1, 2), (3, 4) on duplicate key update a = values (a) + 1, b = 4");
         printStatement("insert into t (a, b) values (1, 2), (3, 4) on duplicate key update a = values (a) + 1, b = values(b) - 2");
         printStatement("kill all");
+//        printStatement("show create table foo");
     }
 
     @Test
@@ -521,7 +522,7 @@ public class TestStatementBuilder
         println("");
 
         // TODO: support formatting all statement types
-        if (statement instanceof Query) {
+        if (statement instanceof Query || statement instanceof CreateTable) {
             println(SqlFormatter.formatSql(statement));
             println("");
             assertFormattedSql(statement);

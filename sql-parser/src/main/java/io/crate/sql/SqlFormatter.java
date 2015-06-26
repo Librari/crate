@@ -29,7 +29,10 @@ import com.google.common.collect.Iterables;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
+import static com.google.common.collect.Iterables.transform;
 import static io.crate.sql.ExpressionFormatter.expressionFormatterFunction;
 import static io.crate.sql.ExpressionFormatter.formatExpression;
 import static com.google.common.base.Preconditions.checkArgument;
@@ -98,7 +101,7 @@ public final class SqlFormatter
             process(node.getQueryBody(), indent);
 
             if (!node.getOrderBy().isEmpty()) {
-                append(indent, "ORDER BY " + Joiner.on(", ").join(Iterables.transform(node.getOrderBy(), orderByFormatterFunction())))
+                append(indent, "ORDER BY " + Joiner.on(", ").join(transform(node.getOrderBy(), orderByFormatterFunction())))
                         .append('\n');
             }
 
@@ -148,7 +151,7 @@ public final class SqlFormatter
             }
 
             if (!node.getGroupBy().isEmpty()) {
-                append(indent, "GROUP BY " + Joiner.on(", ").join(Iterables.transform(node.getGroupBy(), expressionFormatterFunction())))
+                append(indent, "GROUP BY " + Joiner.on(", ").join(transform(node.getGroupBy(), expressionFormatterFunction())))
                         .append('\n');
             }
 
@@ -158,7 +161,7 @@ public final class SqlFormatter
             }
 
             if (!node.getOrderBy().isEmpty()) {
-                append(indent, "ORDER BY " + Joiner.on(", ").join(Iterables.transform(node.getOrderBy(), orderByFormatterFunction())))
+                append(indent, "ORDER BY " + Joiner.on(", ").join(transform(node.getOrderBy(), orderByFormatterFunction())))
                         .append('\n');
             }
 
@@ -241,6 +244,144 @@ public final class SqlFormatter
                 }
                 builder.append(")");
             }
+            return null;
+        }
+
+        @Override
+        public Void visitCreateTable(CreateTable node, Integer indent)
+        {
+            builder.append("CREATE TABLE ");
+            if (node.ifNotExists()) {
+                builder.append("IF NOT EXISTS ");
+            }
+            builder.append(node.name().getName().toString());
+            builder.append(" (");
+            int count = 0,
+                    max = node.tableElements().size();
+            for (TableElement element : node.tableElements()) {
+                element.accept(this, indent);
+                if (++count < max) builder.append(", ");
+            }
+            builder.append(")");
+
+            if (!node.crateTableOptions().isEmpty()) {
+                builder.append(" ");
+                count = 0;
+                max = node.crateTableOptions().size();
+                for (CrateTableOption option : node.crateTableOptions()) {
+                    option.accept(this, indent);
+                    if (++count < max) builder.append(", ");
+                }
+            }
+
+            if (node.properties().isPresent()) {
+                builder.append(" WITH (");
+                node.properties().get().accept(this, indent);
+                builder.append(")");
+            }
+            return null;
+        }
+
+        @Override
+        public Void visitClusteredBy(ClusteredBy node, Integer indent) {
+            builder.append("CLUSTERED");
+            if (node.column().isPresent()) {
+                builder.append(String.format(" BY (%s)", node.column().get()));
+            }
+            if (node.numberOfShards().isPresent()) {
+                builder.append(String.format(" INTO %s SHARDS", node.numberOfShards().get()));
+            }
+            return null;
+        }
+
+        @Override
+        public Void visitGenericProperties(GenericProperties node, Integer indent) {
+            int count = 0,
+                    max = node.properties().size();
+            for (Map.Entry<String, Expression> propertyEntry : node.properties().entrySet()) {
+                builder.append(propertyEntry.getKey());
+                builder.append(" = ");
+                propertyEntry.getValue().accept(this, indent);
+                if (++count < max) builder.append(", ");
+            }
+            return null;
+        }
+
+        @Override
+        protected Void visitLongLiteral(LongLiteral node, Integer indent) {
+            builder.append(String.format("%d", node.getValue()));
+            return null;
+        }
+
+        @Override
+        protected Void visitStringLiteral(StringLiteral node, Integer indent) {
+            builder.append(String.format("'%s'", node.getValue()));
+            return null;
+        }
+
+        @Override
+        public Void visitColumnDefinition(ColumnDefinition node, Integer indent) {
+            builder.append(String.format("\"%s\"", node.ident())) // todo: only quote neccessary column idents
+                    .append(" ");
+            node.type().accept(this, indent);
+
+            if (!node.constraints().isEmpty()) {
+                for (ColumnConstraint constraint : node.constraints()) {
+                    builder.append(" ");
+                    constraint.accept(this, indent);
+                }
+            }
+            return null;
+        }
+
+        @Override
+        public Void visitColumnType(ColumnType node, Integer indent) {
+            builder.append(node.name().toUpperCase(Locale.ENGLISH));
+            return null;
+        }
+
+        @Override
+        public Void visitObjectColumnType(ObjectColumnType node, Integer indent) {
+            builder.append("OBJECT");
+            if (node.objectType().isPresent()) {
+                builder.append(String.format(" (%s)", node.objectType().get()));
+            }
+            if (!node.nestedColumns().isEmpty()) {
+                builder.append(" AS (");
+                int count = 0,
+                        max = node.nestedColumns().size();
+                for (ColumnDefinition child : node.nestedColumns()) {
+                    child.accept(this, indent);
+                    if (++count < max) builder.append(", ");
+                }
+                builder.append(")");
+            }
+            return null;
+        }
+
+        @Override
+        public Void visitIndexColumnConstraint(IndexColumnConstraint node, Integer indent) {
+            builder.append("INDEX ")
+                    .append(node.indexMethod());
+            return null;
+        }
+
+        @Override
+        public Void visitPrimaryKeyColumnConstraint(PrimaryKeyColumnConstraint node, Integer indent) {
+            builder.append("PRIMARY KEY");
+            return null;
+        }
+
+        @Override
+        public Void visitPrimaryKeyConstraint(PrimaryKeyConstraint node, Integer indent) {
+            builder.append("PRIMARY KEY (");
+            int count = 0,
+                    max = node.columns().size();
+            for (Expression expression : node.columns()) {
+                expression.accept(this, indent);
+                if (++count < max) builder.append(", ");
+            }
+            builder.append(")");
             return null;
         }
 
